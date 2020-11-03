@@ -21,7 +21,7 @@ namespace WebAPI.CreditServices
             var httpRequestMessage = new HttpRequestMessage
             {
                 Method = HttpMethod.Post,
-                RequestUri = new Uri("https://interview.riskxint.com/mastercard/capture_card"),
+                RequestUri = new Uri("---"),
                 Headers = {
                     { "identifier", merchantIdentifier }
                 },
