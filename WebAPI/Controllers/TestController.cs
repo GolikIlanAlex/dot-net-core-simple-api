@@ -7,6 +7,8 @@ using System.Runtime.Serialization;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using GiphyDotNet.Manager;
+using GiphyDotNet.Model.Parameters;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http;
 using Microsoft.AspNetCore.WebUtilities;
@@ -25,51 +27,73 @@ namespace WebAPI.Controllers
     {
 
         private readonly ILogger<ApiController> _logger;
-        private readonly ICreditServiceProviderFactory _creditServiceProviderFactory;
-        private readonly IParser _parser;
-        private readonly IDeclineStorage _storage;
+        private readonly IFetchingManager _fetchingManager;
 
-        public ApiController(ILogger<ApiController> logger, ICreditServiceProviderFactory creditServiceProviderFactory, 
-            IParser parser, IDeclineStorage storage)
+        public ApiController(ILogger<ApiController> logger, IFetchingManager fetchingManager)
         {
             _logger = logger;
-            _creditServiceProviderFactory = creditServiceProviderFactory;
-            _parser = parser;
-            _storage = storage;
+            _fetchingManager = fetchingManager;
         }
 
-        [HttpPost("charge")]
-        public async Task<IActionResult> Charge([FromBody] ChargeDto item)
+        [HttpDelete("deleteTrendingKey")]
+        public IActionResult DeleteTrendingKey([FromBody] DeleteKeyQuery key)
         {
             try
             {
-                if (item == null)
-                {
-                    return BadRequest();
-                }
-
-                if (!Request.Headers.TryGetValue("identifier", out var value)) return BadRequest();
-                var merchantIdentifier = value.First();
-                var response = await _creditServiceProviderFactory.GetCreditService(item.CreditCardCompany).Charge(item, merchantIdentifier);
-                return _parser.Parse(response);
+                _fetchingManager.DeleteFromTrendingStorageByKey(key);
+                return Ok();
             }
             catch (Exception e)
             {
-                return BadRequest();
+                _logger.Log(LogLevel.Error, e.ToString());
+                return BadRequest($"failed to delete trending key {key.Key}");
             }
         }
 
-        [HttpGet("chargeStatuses")]
-        public async Task<IActionResult> ChargeStatuses()
+        [HttpDelete("deleteSearchKey")]
+        public IActionResult DeleteSearchKey([FromBody] DeleteKeyQuery key)
         {
-            if (!Request.Headers.TryGetValue("identifier", out var value)) return new NotFoundResult();
-            var response = await _storage.GetHandledDeclinedRequests(value);
-            var contentResult = new ContentResult
+            try
             {
-                Content = JsonConvert.SerializeObject(response.GroupBy(s => s)
-                    .Select(grouping => new {reason = grouping.Key, count = grouping.Count()}))
-            };
-            return contentResult;
+                _fetchingManager.DeleteFromSearchStorageByKey(key);
+                return Ok();
+            }
+            catch (Exception e)
+            {
+                _logger.Log(LogLevel.Error, e.ToString());
+                return BadRequest($"failed to delete trending key {key.Key}");
+            }
+        }
+
+
+        [HttpGet("fetchTrendingGifs")]
+        public async Task<IActionResult> FetchTrendingGifs()
+        {
+            try
+            {
+                var urls = await _fetchingManager.GetTrendingsURlsOfTheDay();
+                return Ok(JsonConvert.SerializeObject(urls));
+            }
+            catch (Exception e)
+            {
+                _logger.Log(LogLevel.Error, e.ToString());
+                return BadRequest("failed to fetch trending gifs");
+            }
+        }
+
+        [HttpGet("fetchGifsByMetadata")]
+        public async Task<IActionResult> FetchGifsByMetadata([FromBody]CustomMetadata metadata)
+        {
+            try
+            {
+                var urls = await _fetchingManager.GetByCustomMetadata(metadata);
+                return Ok(JsonConvert.SerializeObject(urls));
+            }
+            catch (Exception e)
+            {
+                _logger.Log(LogLevel.Error, e.ToString());
+                return BadRequest("failed to fetch gifs by metadata");
+            }
         }
     }
 }
